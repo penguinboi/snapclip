@@ -1,48 +1,48 @@
-# macshot
+# Snapclip
 
-A tiny macOS screenshot hotkey that **captures any window** and **copies the file path to your clipboard** — ready to paste into whatever tool you're feeding screenshots to (an AI coding assistant, a chat, a bug report).
+A tiny screenshot hotkey that **captures any window** and **copies the file path to your clipboard** — ready to paste into whatever you're feeding screenshots to (an AI coding assistant, a chat, a bug report). One keystroke: capture, saved to a managed folder, path on your clipboard. No Desktop clutter.
 
-It exists to solve one specific, maddening macOS problem: screenshot shortcuts wired through Automator or shell scripts **"sometimes" fail with a Screen Recording permission prompt depending on which app you're pointing at.** macshot fixes that permanently.
+This is the **macOS** version. (Snapclip is the brand — Linux/Windows versions can follow under the same name.)
 
-## The problem it solves
+## The problem it solves (macOS)
 
-macOS gates screen capture behind the **Screen Recording** privacy permission. The catch: when a screenshot is triggered from an **Automator Quick Action / Service or a shell script**, macOS attributes the capture to the **frontmost app** — the very app you're trying to screenshot. So Chrome works, but the moment you point at an app that hasn't been granted Screen Recording (a new app, a password manager, a game launcher), the capture is blocked or comes out blank.
+macOS gates screen capture behind the **Screen Recording** permission, and wiring a screenshot to a hotkey the obvious way is a trap:
 
-There's no single app to grant, because the responsible identity keeps changing to whatever's in front. It's whack-a-mole.
+- Trigger `screencapture` from an **Automator Quick Action or a shell script**, and macOS attributes the capture to the **frontmost app** — the very window you're shooting. So it works on apps you've granted and silently fails on ones you haven't. Whack-a-mole.
+- Try to fix that with a wrapper **`.app` whose executable is a shell script**, and it's *worse*: that app has no compiled binary of its own, so the running process is `/bin/bash` — a generic system interpreter with no grantable identity. macOS **never even prompts**, and every capture is silently denied.
 
 ## The fix
 
-Give the capture a **stable app identity**. macshot builds a tiny, ad-hoc-signed `.app` whose only job is to run `screencapture` under **its own** identity. You grant Screen Recording to **that one app, once** — and because Screen Recording permission is about the *capturing* app's right to record (not the captured app's consent), it can now grab **any** window: new apps, password managers, game launchers, anything. No more per-app toggles, no more prompts.
+Snapclip builds a **real, compiled applet** (a Mach-O binary via `osacompile`), code-signed, whose only job is to run `screencapture` under **its own stable identity**. Because it's a genuine app:
+
+- macOS **prompts** for Screen Recording the first time, and you grant it **once**.
+- Screen Recording permission is about the *capturing* app's right to record — not the captured window's consent — so it can then grab **any** window: new apps, password managers, game launchers, anything.
+- Signed with a **Developer ID** certificate, the grant **persists across reboots** (macOS anchors it to the stable certificate). Ad-hoc signing also works but the grant may need occasional re-approval.
 
 ## Install
 
 ```sh
-git clone https://github.com/penguinboi/macshot.git
-cd macshot
+git clone https://github.com/penguinboi/snapclip.git
+cd snapclip
 ./build.sh
 ```
 
-`build.sh` creates `~/Applications/macshot.app` (self-contained, ad-hoc signed) and prints the two remaining one-time steps:
+`build.sh` creates `~/Applications/Snapclip.app` (a signed Mach-O applet — Developer ID if you have one, else ad-hoc) and prints the remaining one-time steps:
 
-1. **Grant Screen Recording** to `macshot.app`:
-   System Settings → Privacy & Security → Screen Recording & System Audio → **+** → `~/Applications/macshot.app` → toggle **on**.
-2. **Bind a hotkey** to run `open "$HOME/Applications/macshot.app"` (an Automator Quick Action bound in System Settings → Keyboard → Keyboard Shortcuts → Services works well; so does any launcher).
+1. **Bind a hotkey** to run `open "$HOME/Applications/Snapclip.app"` — an Automator Quick Action (Run Shell Script) bound in System Settings → Keyboard → Keyboard Shortcuts → Services works well; so does any launcher.
+2. **Trigger it once** → macOS prompts *"Snapclip wants to record the screen"* → **Allow**.
 
-Press the hotkey, drag a region (or press Space to click a window). The PNG path lands on your clipboard.
+Then: hotkey → drag a region (or press Space to click a window) → the PNG path is on your clipboard.
 
 ## Configure
 
-Optional. By default captures go to `~/Pictures/macshot`. To change it, create `~/.config/macshot/config`:
+Captures go to `~/Pictures/snapclip` by default. To change it, create `~/.config/snapclip/config`:
 
 ```sh
-mkdir -p ~/.config/macshot
-echo 'SCREENSHOT_DIR=/some/where/else' > ~/.config/macshot/config
+mkdir -p ~/.config/snapclip
+echo 'SCREENSHOT_DIR=/some/where/else' > ~/.config/snapclip/config
 # RETENTION_DAYS=7   # prune captures older than N days (default 7)
 ```
-
-## Why macOS only
-
-Every moving part is Apple-specific: the `screencapture` tool, the TCC Screen Recording permission model, `.app` bundles, and Automator Services. There's no cross-platform equivalent, so this is macOS only by nature.
 
 ## License
 

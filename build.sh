@@ -1,71 +1,74 @@
 #!/bin/bash
-# ABOUTME: Builds and installs the macshot .app (a stable-identity screenshot capturer) into ~/Applications.
-# ABOUTME: The app bundles and runs macshot.sh under its OWN identity, so it can capture any window once granted Screen Recording.
+# ABOUTME: Builds and installs the Snapclip capture app (macOS) into ~/Applications.
+# ABOUTME: Produces a REAL signed Mach-O applet so macOS grants it Screen Recording and the grant persists.
 set -euo pipefail
 
-APP_NAME="macshot"
-BUNDLE_ID="com.penguinboisoftware.macshot"
+APP_NAME="Snapclip"
+BUNDLE_ID="com.penguinboisoftware.snapclip"
 INSTALL_DIR="$HOME/Applications"
 APP="$INSTALL_DIR/$APP_NAME.app"
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)/src"
 
 mkdir -p "$INSTALL_DIR"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-# --- Info.plist (LSUIElement = agent app, no Dock icon) ---
-cat > "$APP/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleName</key><string>${APP_NAME}</string>
-  <key>CFBundleDisplayName</key><string>${APP_NAME}</string>
-  <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
-  <key>CFBundleExecutable</key><string>launcher</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleVersion</key><string>1.0</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>LSUIElement</key><true/>
-</dict>
-</plist>
-PLIST
+# --- Build a REAL Mach-O applet (this is the whole trick).
+# A .app whose executable is a shell script has no Mach-O of its own — launchd runs
+# /bin/bash, which has no grantable identity, so macOS never prompts for Screen
+# Recording and silently denies every capture. An osacompile applet is a compiled
+# binary that runs our capture script as a child, so TCC attributes the capture to
+# THIS app's identity — which can be prompted for, granted, and (when Developer-ID
+# signed) remembered across reboots.
+AS_TMP="$(mktemp -t snapclip).applescript"
+cat > "$AS_TMP" <<'APPLESCRIPT'
+on run
+	set myPath to POSIX path of (path to me)
+	do shell script quoted form of (myPath & "Contents/Resources/snapclip.sh")
+end run
+APPLESCRIPT
+osacompile -o "$APP" "$AS_TMP"
+rm -f "$AS_TMP"
 
-# --- Bundle the capture script + a launcher that runs it from inside the bundle ---
-cp "$SRC_DIR/macshot.sh" "$APP/Contents/Resources/macshot.sh"
-chmod +x "$APP/Contents/Resources/macshot.sh"
-cat > "$APP/Contents/MacOS/launcher" <<'STUB'
-#!/bin/bash
-DIR="$(cd "$(dirname "$0")/../Resources" && pwd)"
-exec "$DIR/macshot.sh"
-STUB
-chmod +x "$APP/Contents/MacOS/launcher"
+# --- Bundle the capture script inside the app (self-contained) ---
+cp "$SRC_DIR/snapclip.sh" "$APP/Contents/Resources/snapclip.sh"
+chmod +x "$APP/Contents/Resources/snapclip.sh"
 
-# --- Ad-hoc codesign: gives the app a stable identity so its Screen Recording grant sticks ---
-codesign --force --sign - "$APP"
+# --- Clean bundle id + agent app (no Dock bounce) ---
+plutil -replace CFBundleIdentifier -string "$BUNDLE_ID" "$APP/Contents/Info.plist"
+plutil -replace LSUIElement -bool true "$APP/Contents/Info.plist"
 
-# --- Register with LaunchServices so `open` and TCC recognize it ---
+# --- Sign. A Developer ID identity makes the Screen Recording grant PERSIST across
+# reboots (macOS anchors the TCC grant to the stable certificate). Ad-hoc still
+# works (real Mach-O = grantable), but the grant may need re-approving after some
+# reboots or macOS updates.
+DEVID="$(security find-identity -v -p codesigning 2>/dev/null | grep 'Developer ID Application' | head -1 | sed -E 's/.*"(.*)".*/\1/')"
+if [ -n "$DEVID" ]; then
+  echo "Signing with Developer ID: $DEVID"
+  codesign --force --deep --sign "$DEVID" "$APP"
+else
+  echo "No Developer ID certificate found — signing ad-hoc (grant may need re-approval after reboots)."
+  codesign --force --deep --sign - "$APP"
+fi
+
+# --- Register with LaunchServices ---
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" 2>/dev/null || true
 
 cat <<DONE
 
 Installed: $APP
+  ($([ -n "$DEVID" ] && echo "Developer ID signed — grant persists across reboots" || echo "ad-hoc signed — grant may need occasional re-approval"))
 
 Next steps
 ----------
-1. Grant Screen Recording permission to "$APP_NAME" (this is the one-time fix that lets it capture any window):
-   System Settings -> Privacy & Security -> Screen Recording & System Audio
-   -> click "+" -> Cmd-Shift-G -> ~/Applications -> select "$APP_NAME.app" -> toggle ON
-
-2. Bind a hotkey to launch it. Any launcher works; the command to run is:
+1. Bind a hotkey to launch it. The command to run is:
        open "$APP"
    e.g. an Automator "Quick Action" (Run Shell Script) bound to a shortcut in
    System Settings -> Keyboard -> Keyboard Shortcuts -> Services.
 
-3. (Optional) choose where captures are saved:
-       mkdir -p ~/.config/macshot
-       echo 'SCREENSHOT_DIR=$HOME/Pictures/macshot' > ~/.config/macshot/config
+2. Trigger it once. macOS prompts "Snapclip wants to record the screen" -> Allow.
+   (One-time — the app has a real identity, so the grant sticks.)
 
-Press your hotkey, drag a region (or Space to pick a window). The PNG path is
-copied to your clipboard, ready to paste.
+Then: hotkey -> drag a region (or Space to pick a window) -> the PNG path is on
+your clipboard, ready to paste. Captures save to ~/Pictures/snapclip by default
+(override in ~/.config/snapclip/config with:  SCREENSHOT_DIR=/some/path).
 DONE
