@@ -2,7 +2,7 @@
 
 A tiny screenshot hotkey that **captures any window** and **copies the file path to your clipboard** — ready to paste into whatever you're feeding screenshots to (an AI coding assistant, a chat, a bug report). One keystroke: capture, saved to a managed folder, path on your clipboard. No Desktop clutter.
 
-Available for **macOS** and **Windows**. Each platform has its own implementation, because the hard part is a different problem on each. They share the capture folder, the `shot-<timestamp>.png` naming, and the config file format.
+Available for **macOS** and **Windows**. Each platform has its own implementation, because the hard part is a different problem on each. They share the capture folder, the `shot-<timestamp>.png` naming, the config file format, and the hotkey: **Cmd+Shift+1** on macOS, **Ctrl+Shift+1** on Windows.
 
 ## macOS
 
@@ -29,7 +29,7 @@ cd snapclip
 
 `build.sh` creates `~/Applications/Snapclip.app` (a signed Mach-O applet — Developer ID if you have one, else ad-hoc) and prints the remaining one-time steps:
 
-1. **Bind a hotkey** to run `open "$HOME/Applications/Snapclip.app"` — an Automator Quick Action (Run Shell Script) bound in System Settings → Keyboard → Keyboard Shortcuts → Services works well; so does any launcher.
+1. **Bind Cmd+Shift+1** to run `open "$HOME/Applications/Snapclip.app"`. An Automator Quick Action (Run Shell Script) assigned in System Settings → Keyboard → Keyboard Shortcuts → Services works well; so does any launcher.
 2. **Trigger it once** → macOS prompts *"Snapclip wants to record the screen"* → **Allow**.
 
 Then: hotkey → drag a region (or press Space to click a window) → the PNG path is on your clipboard.
@@ -50,7 +50,7 @@ cd snapclip
 pwsh -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-That installs to `%LOCALAPPDATA%\Programs\Snapclip` and creates a Start Menu shortcut carrying a global hotkey. The default is `CTRL+SHIFT+1`, matching Cmd+Shift+1 on the macOS side (Cmd has no Windows equivalent, so it maps to Ctrl). Choose your own:
+That installs to `%LOCALAPPDATA%\Programs\Snapclip` and creates a Start Menu shortcut carrying a global hotkey. The default is `CTRL+SHIFT+1`, matching Cmd+Shift+1 on macOS (Cmd has no Windows equivalent, so it maps to Ctrl). Unlike the macOS side, this binding is applied for you. Choose your own:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\install.ps1 -Hotkey "CTRL+SHIFT+4"

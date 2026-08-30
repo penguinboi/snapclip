@@ -60,9 +60,10 @@ Installed: $APP
 
 Next steps
 ----------
-1. Bind a hotkey to launch it. The command to run is:
+1. Bind Cmd+Shift+1 to launch it. The command to run is:
        open "$APP"
-   e.g. an Automator "Quick Action" (Run Shell Script) bound to a shortcut in
+   Create an Automator "Quick Action" (Run Shell Script) containing that line,
+   save it as Snapclip, then assign Cmd+Shift+1 to it in
    System Settings -> Keyboard -> Keyboard Shortcuts -> Services.
 
 2. Trigger it once. macOS prompts "Snapclip wants to record the screen" -> Allow.
