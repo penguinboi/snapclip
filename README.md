@@ -2,7 +2,13 @@
 
 A tiny screenshot hotkey that **captures any window** and **copies the file path to your clipboard** — ready to paste into whatever you're feeding screenshots to (an AI coding assistant, a chat, a bug report). One keystroke: capture, saved to a managed folder, path on your clipboard. No Desktop clutter.
 
-Available for **macOS** and **Windows**. Each platform has its own implementation, because the hard part is a different problem on each. They share the capture folder, the `shot-<timestamp>.png` naming, the config file format, and the hotkey: **Cmd+Shift+1** on macOS, **Ctrl+Shift+1** on Windows.
+Available for **macOS**, **Windows** and **Linux**. Each platform has its own implementation, because the hard part is a different problem on each. They share the capture folder, the `shot-<timestamp>.png` naming, the config file format, and the hotkey.
+
+| Platform | Hotkey | Install | Bound for you |
+|---|---|---|---|
+| macOS | Cmd+Shift+1 | `./build.sh` | no, assign it in System Settings |
+| Windows | Ctrl+Shift+1 | `install.ps1` | yes |
+| Linux | Ctrl+Shift+1 | `./install-linux.sh` | no, depends on your desktop |
 
 ## macOS
 
@@ -73,9 +79,66 @@ pwsh -STA -ExecutionPolicy Bypass -File .\tests\snapclip.tests.ps1
 
 Note that the clipboard tests use the real clipboard, so they overwrite whatever is currently on it.
 
+## Linux
+
+Linux has no permission gate and its capture tools are synchronous, so this is the
+simplest of the three. The only real problem is that "Linux" is not one target.
+
+`grim` and `slurp` speak the `wlr-screencopy` protocol, which sway, Hyprland and
+river implement but GNOME and KDE deliberately do not. A Wayland version built only
+on grim is broken for most desktop users. So Snapclip detects the display server and
+the desktop, then picks a tool that actually works there:
+
+| Session | Tool used |
+|---|---|
+| Wayland, GNOME | `gnome-screenshot` |
+| Wayland, KDE | `spectacle` |
+| Wayland, wlroots (sway, Hyprland, river) | `grim` + `slurp` |
+| X11, any desktop | `maim`, else `scrot`, else `import` |
+
+Clipboard is `wl-copy` under Wayland, `xclip` or `xsel` under X11. If nothing usable
+is found, Snapclip exits with the exact package to install for your desktop rather
+than failing quietly.
+
+### Install
+
+```sh
+git clone https://github.com/penguinboi/snapclip.git
+cd snapclip
+./install-linux.sh
+```
+
+That installs to `~/.local/bin/snapclip` and prints how to bind Ctrl+Shift+1 for your
+desktop. On sway that is one line in your config:
+
+```
+bindsym Ctrl+Shift+1 exec ~/.local/bin/snapclip
+```
+
+### What is actually verified
+
+Tested in a clean Ubuntu 24.04 container against a real headless wlroots compositor
+and a virtual X11 framebuffer:
+
+- **X11 / maim / xclip** — captures a valid PNG, path reaches the clipboard
+- **Wayland / grim / slurp / wl-copy** — captures a valid PNG cropped to the selected
+  region, path reaches the clipboard
+- Pruning removes old `shot-*.png` and leaves other files alone
+- A cancelled selection writes no file, changes no clipboard, and exits 0
+
+**Not yet verified on real hardware:** the GNOME (`gnome-screenshot`) and KDE
+(`spectacle`) paths. Their invocations are unit-tested against stubs, but nobody has
+run them on an actual GNOME or KDE desktop. Reports welcome.
+
+### Tests
+
+```sh
+./tests/snapclip-linux.test.sh
+```
+
 ## Configure
 
-Captures go to `~/Pictures/snapclip` by default, on both platforms. Both read the same config file, `~/.config/snapclip/config` (which on Windows is `%USERPROFILE%\.config\snapclip\config`):
+Captures go to `~/Pictures/snapclip` by default, on all three platforms. They read the same config file, `~/.config/snapclip/config` (which on Windows is `%USERPROFILE%\.config\snapclip\config`):
 
 ```sh
 mkdir -p ~/.config/snapclip
