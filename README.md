@@ -50,7 +50,7 @@ cd snapclip
 pwsh -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-That installs to `%LOCALAPPDATA%\Programs\Snapclip` and creates a Start Menu shortcut carrying a global hotkey, `CTRL+ALT+S` by default. Choose your own:
+That installs to `%LOCALAPPDATA%\Programs\Snapclip` and creates a Start Menu shortcut carrying a global hotkey. The default is `CTRL+SHIFT+1`, matching Cmd+Shift+1 on the macOS side (Cmd has no Windows equivalent, so it maps to Ctrl). Choose your own:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\install.ps1 -Hotkey "CTRL+SHIFT+4"

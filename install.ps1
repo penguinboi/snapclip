@@ -5,7 +5,7 @@
 [CmdletBinding()]
 param(
     # Windows registers this globally as long as the shortcut lives in the Start Menu.
-    [string] $Hotkey = 'CTRL+ALT+S'
+    [string] $Hotkey = 'CTRL+SHIFT+1'
 )
 
 Set-StrictMode -Version Latest
