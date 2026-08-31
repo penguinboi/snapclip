@@ -6,7 +6,7 @@ Available for **macOS**, **Windows** and **Linux**. Each platform has its own im
 
 | Platform | Hotkey | Install | Bound for you |
 |---|---|---|---|
-| macOS | Cmd+Shift+1 | `./build.sh` | no, assign it in System Settings |
+| macOS | Cmd+Shift+1 | `./build.sh` | yes, via a Quick Action |
 | Windows | Ctrl+Shift+1 | `install.ps1` | yes |
 | Linux | Ctrl+Shift+1 | `./install-linux.sh` | no, depends on your desktop |
 
@@ -33,12 +33,27 @@ cd snapclip
 ./build.sh
 ```
 
-`build.sh` creates `~/Applications/Snapclip.app` (a signed Mach-O applet — Developer ID if you have one, else ad-hoc) and prints the remaining one-time steps:
+`build.sh` creates `~/Applications/Snapclip.app` (a signed Mach-O applet — Developer ID if you have one, else ad-hoc), binds Cmd+Shift+1 to it, and prints the one remaining step:
 
-1. **Bind Cmd+Shift+1** to run `open "$HOME/Applications/Snapclip.app"`. An Automator Quick Action (Run Shell Script) assigned in System Settings → Keyboard → Keyboard Shortcuts → Services works well; so does any launcher.
-2. **Trigger it once** → macOS prompts *"Snapclip wants to record the screen"* → **Allow**.
+1. **Trigger it once** → macOS prompts *"Snapclip wants to record the screen"* → **Allow**.
 
-Then: hotkey → drag a region (or press Space to click a window) → the PNG path is on your clipboard.
+Then: Cmd+Shift+1 → drag a region (or press Space to click a window) → the PNG path is on your clipboard.
+
+### The hotkey binding
+
+macOS has no way for a one-shot applet to claim a global shortcut, so `build.sh`
+installs an Automator Quick Action into `~/Library/Services` and writes the
+Cmd+Shift+1 shortcut into `pbs.plist`. It then reads the shortcut back and prints the
+manual steps if macOS did not take it. A failed binding never fails the install: the
+app still works, only the shortcut is missing.
+
+macOS caches its services list, so a brand new Quick Action sometimes needs a logout
+before the shortcut fires. To re-run or check the binding on its own:
+
+```sh
+./bind-hotkey-macos.sh            # bind it
+./bind-hotkey-macos.sh --verify   # report what is actually set
+```
 
 ## Windows
 
@@ -135,6 +150,21 @@ run them on an actual GNOME or KDE desktop. Reports welcome.
 ```sh
 ./tests/snapclip-linux.test.sh
 ```
+
+## Finding your way around
+
+Every platform answers `--help` with where its captures go, where its config lives,
+and what the hotkey is:
+
+```sh
+snapclip --help                  # macOS, Linux
+snapclip.ps1 -Help               # Windows
+```
+
+The first successful capture also introduces itself once, because the surprising part
+is that the **path** lands on your clipboard rather than the image. After that it goes
+back to a one-line confirmation. The marker that tracks this is
+`~/.config/snapclip/.introduced`; delete it to see the introduction again.
 
 ## Configure
 

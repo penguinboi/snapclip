@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# ABOUTME: Binds Cmd+Shift+1 to Snapclip by installing a Quick Action and assigning its shortcut.
+# ABOUTME: Checks what it wrote and prints manual steps when macOS has not taken the binding.
+set -uo pipefail
+
+SERVICE_NAME="Snapclip"
+APP="${SNAPCLIP_APP:-$HOME/Applications/Snapclip.app}"
+SERVICES_DIR="$HOME/Library/Services"
+WORKFLOW="$SERVICES_DIR/$SERVICE_NAME.workflow"
+
+# pbs encodes modifiers as symbols: @ Command, $ Shift, ^ Control, ~ Option.
+KEY_EQUIVALENT='@$1'
+HOTKEY_LABEL='Cmd+Shift+1'
+
+# pbs keys services by this exact triple. A mismatch here is silently ignored,
+# which is why the shortcut is read back afterwards rather than assumed.
+SERVICE_KEY="(null) - $SERVICE_NAME - runWorkflowAsService"
+
+write_workflow() {
+    mkdir -p "$WORKFLOW/Contents"
+
+    cat > "$WORKFLOW/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>$SERVICE_NAME</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>runWorkflowAsService</string>
+			<key>NSSendTypes</key>
+			<array/>
+		</dict>
+	</array>
+</dict>
+</plist>
+PLIST
+
+    # "Receives no input in any application" is what makes the shortcut fire
+    # everywhere instead of only where a selection exists.
+    cat > "$WORKFLOW/Contents/document.wflow" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AMApplicationBuild</key>
+	<string>521</string>
+	<key>AMApplicationVersion</key>
+	<string>2.10</string>
+	<key>AMDocumentVersion</key>
+	<string>2</string>
+	<key>actions</key>
+	<array>
+		<dict>
+			<key>action</key>
+			<dict>
+				<key>AMActionVersion</key>
+				<string>2.0.3</string>
+				<key>ActionBundlePath</key>
+				<string>/System/Library/Automator/Run Shell Script.action</string>
+				<key>ActionName</key>
+				<string>Run Shell Script</string>
+				<key>ActionParameters</key>
+				<dict>
+					<key>COMMAND_STRING</key>
+					<string>open "$APP"</string>
+					<key>CheckedForUserDefaultShell</key>
+					<true/>
+					<key>inputMethod</key>
+					<integer>0</integer>
+					<key>shell</key>
+					<string>/bin/bash</string>
+					<key>source</key>
+					<string></string>
+				</dict>
+				<key>BundleIdentifier</key>
+				<string>com.apple.RunShellScript</string>
+				<key>CFBundleVersion</key>
+				<string>2.0.3</string>
+				<key>CanShowSelectedItemsWhenRun</key>
+				<false/>
+				<key>CanShowWhenRun</key>
+				<true/>
+				<key>Category</key>
+				<array>
+					<string>AMCategoryUtilities</string>
+				</array>
+				<key>Class Name</key>
+				<string>RunShellScriptAction</string>
+				<key>InputUUID</key>
+				<string>$(uuidgen)</string>
+				<key>Keywords</key>
+				<array>
+					<string>Shell</string>
+					<string>Script</string>
+					<string>Command</string>
+				</array>
+				<key>OutputUUID</key>
+				<string>$(uuidgen)</string>
+				<key>UUID</key>
+				<string>$(uuidgen)</string>
+				<key>UnlocalizedApplications</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>isViewVisible</key>
+				<integer>1</integer>
+			</dict>
+		</dict>
+	</array>
+	<key>workflowMetaData</key>
+	<dict>
+		<key>presentationMode</key>
+		<integer>11</integer>
+		<key>processesInput</key>
+		<integer>0</integer>
+		<key>serviceInputTypeIdentifier</key>
+		<string>com.apple.Automator.nothing</string>
+		<key>serviceOutputTypeIdentifier</key>
+		<string>com.apple.Automator.nothing</string>
+		<key>serviceProcessesInput</key>
+		<integer>0</integer>
+		<key>workflowTypeIdentifier</key>
+		<string>com.apple.Automator.servicesMenu</string>
+	</dict>
+</dict>
+</plist>
+PLIST
+}
+
+assign_shortcut() {
+    defaults write pbs NSServicesStatus -dict-add "$SERVICE_KEY" \
+        "{ key_equivalent = \"$KEY_EQUIVALENT\"; enabled_context_menu = 1; enabled_services_menu = 1; }"
+    /System/Library/CoreServices/pbs -flush 2>/dev/null
+    /System/Library/CoreServices/pbs -update 2>/dev/null
+}
+
+read_shortcut() {
+    defaults read pbs NSServicesStatus 2>/dev/null |
+        tr -d '\n' |
+        grep -o "\"$SERVICE_KEY\"[^}]*}" |
+        grep -o 'key_equivalent = "[^"]*"' |
+        sed 's/.*"\(.*\)"/\1/'
+}
+
+verify() {
+    local ok=0
+
+    if [ -f "$WORKFLOW/Contents/document.wflow" ]; then
+        echo "  Quick Action installed : $WORKFLOW"
+    else
+        echo "  Quick Action MISSING   : $WORKFLOW"; ok=1
+    fi
+
+    if plutil -lint "$WORKFLOW/Contents/Info.plist" >/dev/null 2>&1 &&
+       plutil -lint "$WORKFLOW/Contents/document.wflow" >/dev/null 2>&1; then
+        echo "  Property lists         : valid"
+    else
+        echo "  Property lists         : INVALID"; ok=1
+    fi
+
+    local current; current="$(read_shortcut)"
+    if [ "$current" = "$KEY_EQUIVALENT" ]; then
+        echo "  Shortcut recorded      : $HOTKEY_LABEL"
+    else
+        echo "  Shortcut NOT recorded  : got [${current:-nothing}], wanted [$KEY_EQUIVALENT]"; ok=1
+    fi
+
+    return $ok
+}
+
+manual_steps() {
+    cat <<EOF
+
+Set it by hand instead:
+  1. System Settings -> Keyboard -> Keyboard Shortcuts -> Services
+  2. Find "$SERVICE_NAME" under General
+  3. Click it and press $HOTKEY_LABEL
+EOF
+}
+
+if [ "${1:-}" = "--verify" ]; then
+    echo "Snapclip hotkey binding:"
+    verify || manual_steps
+    exit $?
+fi
+
+if [ "$(uname)" != "Darwin" ]; then
+    echo "bind-hotkey-macos.sh: macOS only (this is $(uname))." >&2
+    exit 1
+fi
+
+write_workflow
+assign_shortcut
+
+echo "Binding $HOTKEY_LABEL to Snapclip:"
+if verify; then
+    cat <<EOF
+
+Press $HOTKEY_LABEL to capture. If nothing happens, log out and back in: macOS
+caches the services list, and a newly installed Quick Action is not always picked
+up until the session restarts.
+EOF
+else
+    echo
+    echo "The automatic binding did not take."
+    manual_steps
+fi

@@ -30,7 +30,7 @@ osacompile -o "$APP" "$AS_TMP"
 rm -f "$AS_TMP"
 
 # --- Bundle the capture script inside the app (self-contained) ---
-cp "$SRC_DIR/snapclip.sh" "$APP/Contents/Resources/snapclip.sh"
+cp "$SRC_DIR/snapclip-macos.sh" "$APP/Contents/Resources/snapclip.sh"
 chmod +x "$APP/Contents/Resources/snapclip.sh"
 
 # --- Clean bundle id + agent app (no Dock bounce) ---
@@ -58,18 +58,21 @@ cat <<DONE
 Installed: $APP
   ($([ -n "$DEVID" ] && echo "Developer ID signed — grant persists across reboots" || echo "ad-hoc signed — grant may need occasional re-approval"))
 
-Next steps
-----------
-1. Bind Cmd+Shift+1 to launch it. The command to run is:
-       open "$APP"
-   Create an Automator "Quick Action" (Run Shell Script) containing that line,
-   save it as Snapclip, then assign Cmd+Shift+1 to it in
-   System Settings -> Keyboard -> Keyboard Shortcuts -> Services.
+DONE
 
-2. Trigger it once. macOS prompts "Snapclip wants to record the screen" -> Allow.
-   (One-time — the app has a real identity, so the grant sticks.)
+# Bind the hotkey. A failure here must not fail the install: the app itself is
+# already working, only the shortcut would be missing, and the binder prints the
+# manual steps when it cannot set it.
+SNAPCLIP_APP="$APP" "$(cd "$(dirname "$0")" && pwd)/bind-hotkey-macos.sh" || true
 
-Then: hotkey -> drag a region (or Space to pick a window) -> the PNG path is on
-your clipboard, ready to paste. Captures save to ~/Pictures/snapclip by default
+cat <<DONE
+
+Next step
+---------
+Trigger Snapclip once. macOS prompts "Snapclip wants to record the screen" -> Allow.
+(One-time — the app has a real identity, so the grant sticks.)
+
+Then: Cmd+Shift+1 -> drag a region (or Space to pick a window) -> the PNG path is
+on your clipboard, ready to paste. Captures save to ~/Pictures/snapclip by default
 (override in ~/.config/snapclip/config with:  SCREENSHOT_DIR=/some/path).
 DONE

@@ -127,5 +127,26 @@ check 'a cancelled slurp selection aborts the capture' 1 \
   "$(capture_region grim "$OUT" >/dev/null 2>&1; echo $?)"
 
 echo
+echo "First-run introduction"
+
+INTRO_MARKER="$STUBS/.introduced"
+check 'introduces itself on the first capture' 0 \
+  "$(show_intro_once 2>/dev/null; echo $?)"
+check 'writes a marker so it can tell next time' yes \
+  "$([ -f "$INTRO_MARKER" ] && echo yes || echo no)"
+check 'stays quiet on every capture after that' 1 \
+  "$(show_intro_once 2>/dev/null; echo $?)"
+
+echo
+echo "Usage text"
+
+check 'usage explains that it is the path, not the image' yes \
+  "$(usage 2>/dev/null | grep -q 'PATH to the PNG, not the image' && echo yes || echo no)"
+check 'usage names the capture folder' yes \
+  "$(usage 2>/dev/null | grep -q "$SCREENSHOT_DIR" && echo yes || echo no)"
+check 'usage reports the backends this session would use' yes \
+  "$(usage 2>/dev/null | grep -q 'This session would use' && echo yes || echo no)"
+
+echo
 printf '%d passed, %d failed\n\n' "$PASSED" "$FAILED"
 [ "$FAILED" -eq 0 ]

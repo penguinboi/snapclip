@@ -8,6 +8,7 @@ set -uo pipefail
 SCREENSHOT_DIR="$HOME/Pictures/snapclip"
 RETENTION_DAYS=7
 CONFIG="$HOME/.config/snapclip/config"
+INTRO_MARKER="$HOME/.config/snapclip/.introduced"
 
 has() { command -v "$1" >/dev/null 2>&1; }
 
@@ -102,7 +103,49 @@ Install one of these, matching your desktop:
 EOF
 }
 
+usage() {
+    cat <<EOF
+Snapclip - capture a screenshot and copy its file path to the clipboard.
+
+The clipboard receives the PATH to the PNG, not the image itself, so it can be
+pasted straight into anything that reads files: an AI coding assistant, a chat,
+a bug report.
+
+Usage:
+  snapclip            capture a region interactively
+  snapclip --help     show this
+
+Hotkey:   Ctrl+Shift+1, if you bound one (see install-linux.sh)
+Captures: $SCREENSHOT_DIR
+Config:   $CONFIG
+            SCREENSHOT_DIR=/some/path
+            RETENTION_DAYS=$RETENTION_DAYS
+
+This session would use: $(detect_capture_backend) for capture, $(detect_clipboard_backend) for clipboard
+EOF
+}
+
+# Said once, because "the path, not the image" is the surprising part and there is
+# no other moment to explain it.
+show_intro_once() {
+    [ -f "$INTRO_MARKER" ] && return 1
+    mkdir -p "$(dirname "$INTRO_MARKER")"
+    : > "$INTRO_MARKER"
+    local body="The FILE PATH is on your clipboard, not the image.
+Captures are saved to $SCREENSHOT_DIR and deleted after $RETENTION_DAYS days.
+Run 'snapclip --help' for more."
+    if has notify-send; then
+        notify-send --app-name=Snapclip --icon=camera-photo "Snapclip is set up" "$body"
+    fi
+    printf 'Snapclip is set up.\n%s\n' "$body" >&2
+    return 0
+}
+
 main() {
+    case "${1:-}" in
+        --help|-h) usage; return 0 ;;
+    esac
+
     [ -f "$CONFIG" ] && . "$CONFIG"
 
     local capture_backend clipboard_backend filepath
@@ -126,7 +169,7 @@ main() {
     # and leave the clipboard alone.
     if [ -s "$filepath" ]; then
         copy_to_clipboard "$clipboard_backend" "$filepath"
-        notify "Path copied to clipboard"
+        show_intro_once || notify "Path copied to clipboard"
         printf '%s\n' "$filepath"
     else
         rm -f "$filepath"

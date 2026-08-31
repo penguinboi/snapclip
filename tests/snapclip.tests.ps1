@@ -132,5 +132,29 @@ Test-Case 'reports no image when the clipboard holds text' {
     Assert-True (-not (Save-ClipboardImage -Path (Join-Path (New-Sandbox) 'none.png'))) 'text is not an image'
 }
 
+Write-Host "`nShow-SnapclipIntroOnce"
+
+Test-Case 'introduces itself once, then stays quiet' {
+    $marker = Join-Path (New-Sandbox) '.introduced'
+    $config = Get-SnapclipConfig -ConfigPath (Join-Path (New-Sandbox) 'absent')
+
+    Assert-True  (Show-SnapclipIntroOnce -Config $config -MarkerPath $marker -Quiet) 'first run should introduce'
+    Assert-True  (Test-Path $marker) 'marker should be written'
+    Assert-True (-not (Show-SnapclipIntroOnce -Config $config -MarkerPath $marker -Quiet)) 'second run should stay quiet'
+}
+
+Test-Case 'the default marker lives beside the config file' {
+    Assert-Equal (Join-Path $HOME '.config/snapclip/.introduced') (Get-SnapclipIntroMarker)
+}
+
+Write-Host "`nShow-SnapclipUsage"
+
+Test-Case 'usage names the hotkey and the capture folder' {
+    $text = Show-SnapclipUsage | Out-String
+    Assert-True ($text -match 'Ctrl\+Shift\+1') 'should name the hotkey'
+    Assert-True ($text -match 'snapclip') 'should name the capture folder'
+    Assert-True ($text -match 'PATH to the PNG, not the image') 'should explain what lands on the clipboard'
+}
+
 Write-Host "`n$($script:Passed) passed, $($script:Failed) failed`n"
 exit ([int]($script:Failed -gt 0))

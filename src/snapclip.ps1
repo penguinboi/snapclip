@@ -118,6 +118,60 @@ function Show-SnapclipNotification {
     }
 }
 
+function Get-SnapclipIntroMarker {
+    Join-Path $HOME '.config/snapclip/.introduced'
+}
+
+function Show-SnapclipUsage {
+    $config = Get-SnapclipConfig
+    @"
+Snapclip - capture a screenshot and copy its file path to the clipboard.
+
+The clipboard receives the PATH to the PNG, not the image itself, so it can be
+pasted straight into anything that reads files: an AI coding assistant, a chat,
+a bug report.
+
+Usage:
+  snapclip            open the snip overlay and capture
+  snapclip -Help      show this
+
+Hotkey:   Ctrl+Shift+1
+Captures: $($config.ScreenshotDir)
+Config:   $(Join-Path $HOME '.config/snapclip/config')
+            SCREENSHOT_DIR=C:\some\path
+            RETENTION_DAYS=$($config.RetentionDays)
+
+Rebind the hotkey by re-running install.ps1 -Hotkey "CTRL+ALT+1"
+"@
+}
+
+function Show-SnapclipIntroOnce {
+    <#
+    .SYNOPSIS
+    Explains the tool the first time it captures, then never again. Returns
+    $true when it showed the intro.
+    #>
+    param(
+        [Parameter(Mandatory)] $Config,
+        [string] $MarkerPath = (Get-SnapclipIntroMarker),
+        [switch] $Quiet
+    )
+
+    $marker = $MarkerPath
+    if (Test-Path -LiteralPath $marker) { return $false }
+
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $marker) | Out-Null
+    New-Item -ItemType File -Force -Path $marker | Out-Null
+
+    # "The path, not the image" is the surprising part, and a hotkey tool has no
+    # other moment to explain itself.
+    if (-not $Quiet) {
+        Show-SnapclipNotification -Message ("The FILE PATH is on your clipboard, not the image. " +
+            "Captures go to $($Config.ScreenshotDir) and are deleted after $($Config.RetentionDays) days.")
+    }
+    $true
+}
+
 function Invoke-Snapclip {
     <#
     .SYNOPSIS
@@ -146,7 +200,9 @@ function Invoke-Snapclip {
         $path = Get-CaptureFilePath -Directory $config.ScreenshotDir
         if (Save-ClipboardImage -Path $path) {
             Set-Clipboard -Value $path
-            Show-SnapclipNotification -Message 'Path copied to clipboard'
+            if (-not (Show-SnapclipIntroOnce -Config $config)) {
+                Show-SnapclipNotification -Message 'Path copied to clipboard'
+            }
             return $path
         }
     }
@@ -157,6 +213,10 @@ function Invoke-Snapclip {
 
 # Dot-sourcing loads the functions for the tests; running the file captures.
 if ($MyInvocation.InvocationName -ne '.') {
-    $captured = Invoke-Snapclip
-    if ($captured) { Write-Output $captured }
+    if ($args | Where-Object { $_ -in '-Help', '--help', '-h', '/?' }) {
+        Show-SnapclipUsage
+    } else {
+        $captured = Invoke-Snapclip
+        if ($captured) { Write-Output $captured }
+    }
 }
