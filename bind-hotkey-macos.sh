@@ -145,9 +145,13 @@ assign_shortcut() {
     /System/Library/CoreServices/pbs -update 2>/dev/null
 }
 
+pbs_dump() {
+    defaults read pbs NSServicesStatus 2>/dev/null
+}
+
 read_shortcut() {
     # Quoting differs across macOS versions, so normalise it away before matching.
-    defaults read pbs NSServicesStatus 2>/dev/null |
+    pbs_dump |
         tr -d '"' |
         tr -d '\n' |
         grep -o "$SERVICE_KEY[^}]*}" |
@@ -187,7 +191,8 @@ verify() {
 # winner and the loser silently stops working. Never take a key without saying so.
 warn_on_shortcut_conflict() {
     local dump others
-    dump="$(defaults read pbs NSServicesStatus 2>/dev/null)" || return 0
+    dump="$(pbs_dump)" || return 0
+    [ -n "$dump" ] || return 0
 
     # `defaults read` quotes keys inconsistently across macOS versions, so compare
     # with every quote stripped instead of guessing which form this machine emits.
@@ -243,11 +248,22 @@ EOF
 
 # Generates into a throwaway directory and lints, touching neither ~/Library/Services
 # nor pbs. Lets the binding be checked on a Mac without installing anything.
+# plutil keypaths are dot-separated, so a dot in the service name would address the
+# wrong node instead of failing. Refuse rather than delete something unintended.
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then return 0 2>/dev/null || true; fi
+
+case "$SERVICE_NAME" in
+    *.*) echo "bind-hotkey-macos.sh: service name '$SERVICE_NAME' contains a dot, which plutil keypaths cannot address." >&2; exit 1 ;;
+esac
+
 if [ "${1:-}" = "--unbind" ]; then
     rm -rf "$WORKFLOW"
     # Leaving the pbs key behind when the workflow is gone is what produces the
     # orphaned entries that accumulate across renames.
-    /usr/libexec/PlistBuddy -c "Delete :NSServicesStatus:$SERVICE_KEY" \
+    # PlistBuddy splits its entry path on whitespace, so it only ever sees
+    # ":NSServicesStatus:(null)" and deletes nothing. plutil takes the key as one
+    # argument and exits non-zero when it fails.
+    plutil -remove "NSServicesStatus.$SERVICE_KEY" \
         "$HOME/Library/Preferences/pbs.plist" >/dev/null 2>&1
     /System/Library/CoreServices/pbs -flush 2>/dev/null
 

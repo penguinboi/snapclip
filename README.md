@@ -161,8 +161,12 @@ run them on an actual GNOME or KDE desktop. Reports welcome.
 ### Tests
 
 ```sh
-./tests/snapclip-linux.test.sh
+./tests/snapclip-linux.test.sh       # capture logic and backend selection
+./tests/bind-hotkey-macos.test.sh    # macOS pbs parsing, runs anywhere
 ```
+
+The macOS binder's tests drive its parsing with captured `defaults read` output, so
+the quoting assumptions that make or break it are checked without needing a Mac.
 
 ## Finding your way around
 
