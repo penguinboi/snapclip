@@ -185,6 +185,26 @@ Set it by hand instead:
 EOF
 }
 
+# Generates into a throwaway directory and lints, touching neither ~/Library/Services
+# nor pbs. Lets the binding be checked on a Mac without installing anything.
+if [ "${1:-}" = "--dry-run" ]; then
+    WORKFLOW="$(mktemp -d)/$SERVICE_NAME.workflow"
+    write_workflow
+    echo "Generated (nothing installed): $WORKFLOW"
+    for plist in Info.plist document.wflow; do
+        if plutil -lint "$WORKFLOW/Contents/$plist" >/dev/null 2>&1; then
+            echo "  $plist: valid"
+        else
+            echo "  $plist: INVALID"
+            plutil -lint "$WORKFLOW/Contents/$plist"
+        fi
+    done
+    echo "  service key would be : $SERVICE_KEY"
+    echo "  shortcut would be    : $KEY_EQUIVALENT ($HOTKEY_LABEL)"
+    echo "  command would be     : open \"$APP\""
+    exit 0
+fi
+
 if [ "${1:-}" = "--verify" ]; then
     echo "Snapclip hotkey binding:"
     verify || manual_steps
