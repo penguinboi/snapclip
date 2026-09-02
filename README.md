@@ -183,6 +183,24 @@ is that the **path** lands on your clipboard rather than the image. After that i
 back to a one-line confirmation. The marker that tracks this is
 `~/.config/snapclip/.introduced`; delete it to see the introduction again.
 
+## Porting note: verifying a cutover
+
+When Snapclip replaces an existing screenshot tool, "a file appeared and its path is on
+the clipboard" does not prove Snapclip produced it. During the macOS cutover the old
+tool was still bound to the hotkey, wrote to the same folder, and set the clipboard the
+same way. It satisfied every acceptance check while the new tool had done nothing.
+
+Three things distinguish them, and it is worth keeping at least one available:
+
+- the `shot-*.png` naming, which differed from the old tool's
+- the one-time `~/.config/snapclip/.introduced` marker, which is only written from
+  inside the successful-capture branch
+- the default capture folder, if the config has not been pointed elsewhere
+
+Also worth knowing: a TCC grant does not apply to an already-running process. After
+granting Screen Recording, the app has to be relaunched before it can capture, and the
+first attempt after granting will silently produce nothing.
+
 ## Configure
 
 Captures go to `~/Pictures/snapclip` by default, on all three platforms. They read the same config file, `~/.config/snapclip/config` (which on Windows is `%USERPROFILE%\.config\snapclip\config`):
