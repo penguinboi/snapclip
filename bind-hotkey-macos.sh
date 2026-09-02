@@ -9,8 +9,8 @@ SERVICES_DIR="$HOME/Library/Services"
 WORKFLOW="$SERVICES_DIR/$SERVICE_NAME.workflow"
 
 # pbs encodes modifiers as symbols: @ Command, $ Shift, ^ Control, ~ Option.
-KEY_EQUIVALENT='@$1'
-HOTKEY_LABEL='Cmd+Shift+1'
+KEY_EQUIVALENT="${SNAPCLIP_KEY_EQUIVALENT:-@\$1}"
+HOTKEY_LABEL="${SNAPCLIP_HOTKEY_LABEL:-Cmd+Shift+1}"
 
 # pbs keys services by this exact triple. A mismatch here is silently ignored,
 # which is why the shortcut is read back afterwards rather than assumed.
@@ -165,6 +165,8 @@ verify() {
         echo "  Property lists         : INVALID"; ok=1
     fi
 
+    check_applet_is_macho || ok=1
+
     local current; current="$(read_shortcut)"
     if [ "$current" = "$KEY_EQUIVALENT" ]; then
         echo "  Shortcut recorded      : $HOTKEY_LABEL"
@@ -173,6 +175,51 @@ verify() {
     fi
 
     return $ok
+}
+
+# macOS does not arbitrate between two services claiming one shortcut; it picks a
+# winner and the loser silently stops working. Never take a key without saying so.
+warn_on_shortcut_conflict() {
+    local dump others
+    dump="$(defaults read pbs NSServicesStatus 2>/dev/null)" || return 0
+
+    others="$(printf '%s\n' "$dump" |
+        grep -B6 -F "key_equivalent = \"$KEY_EQUIVALENT\"" |
+        grep -F '(null)' |
+        grep -vF "$SERVICE_KEY" |
+        sed 's/^[[:space:]]*//; s/[[:space:]]*=.*$//')"
+
+    [ -n "$others" ] || return 0
+
+    cat >&2 <<EOF
+
+WARNING: $HOTKEY_LABEL already belongs to another service:
+$others
+
+macOS will pick one of them and the other stops working, with no error either way.
+Free the key first, or give Snapclip a different one:
+
+    SNAPCLIP_KEY_EQUIVALENT='@\$2' SNAPCLIP_HOTKEY_LABEL='Cmd+Shift+2' ./bind-hotkey-macos.sh
+
+EOF
+    return 1
+}
+
+# A bundle whose executable is a shell script has no Mach-O of its own, so launchd
+# runs /bin/bash and TCC attributes the capture to an identity it cannot grant.
+# Signing does not fix it, and the symptom is silence rather than an error.
+check_applet_is_macho() {
+    local exe
+    exe="$(defaults read "$APP/Contents/Info" CFBundleExecutable 2>/dev/null)"
+    [ -n "$exe" ] || { echo "  Applet executable      : cannot read Info.plist"; return 1; }
+
+    local kind; kind="$(file -b "$APP/Contents/MacOS/$exe" 2>/dev/null)"
+    case "$kind" in
+        *Mach-O*) echo "  Applet executable      : Mach-O ($exe)" ;;
+        *)        echo "  Applet executable      : NOT Mach-O -> $kind"
+                  echo "                           captures will fail silently; rebuild with build.sh"
+                  return 1 ;;
+    esac
 }
 
 manual_steps() {
@@ -187,6 +234,24 @@ EOF
 
 # Generates into a throwaway directory and lints, touching neither ~/Library/Services
 # nor pbs. Lets the binding be checked on a Mac without installing anything.
+if [ "${1:-}" = "--unbind" ]; then
+    rm -rf "$WORKFLOW"
+    # Leaving the pbs key behind when the workflow is gone is what produces the
+    # orphaned entries that accumulate across renames.
+    /usr/libexec/PlistBuddy -c "Delete :NSServicesStatus:$SERVICE_KEY" \
+        "$HOME/Library/Preferences/pbs.plist" >/dev/null 2>&1
+    /System/Library/CoreServices/pbs -flush 2>/dev/null
+
+    if [ -n "$(read_shortcut)" ] || [ -d "$WORKFLOW" ]; then
+        echo "Could not fully remove the binding." >&2
+        echo "  workflow : $([ -d "$WORKFLOW" ] && echo "still at $WORKFLOW" || echo removed)" >&2
+        echo "  pbs key  : $([ -n "$(read_shortcut)" ] && echo "still set" || echo removed)" >&2
+        exit 1
+    fi
+    echo "Removed the Snapclip Quick Action and its shortcut."
+    exit 0
+fi
+
 if [ "${1:-}" = "--dry-run" ]; then
     WORKFLOW="$(mktemp -d)/$SERVICE_NAME.workflow"
     write_workflow
@@ -213,6 +278,14 @@ fi
 
 if [ "$(uname)" != "Darwin" ]; then
     echo "bind-hotkey-macos.sh: macOS only (this is $(uname))." >&2
+    exit 1
+fi
+
+if ! warn_on_shortcut_conflict && [ "${1:-}" != "--force" ]; then
+    cat >&2 <<EOF
+Refusing to take $HOTKEY_LABEL from another service. Nothing was changed.
+Re-run with --force to take it anyway, knowing the other one will stop working.
+EOF
     exit 1
 fi
 

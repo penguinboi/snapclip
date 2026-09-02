@@ -52,8 +52,21 @@ before the shortcut fires. To re-run or check the binding on its own:
 
 ```sh
 ./bind-hotkey-macos.sh            # bind it
+./bind-hotkey-macos.sh --dry-run  # generate and lint, installing nothing
 ./bind-hotkey-macos.sh --verify   # report what is actually set
+./bind-hotkey-macos.sh --unbind   # remove the Quick Action and its shortcut
 ```
+
+If another service already owns Cmd+Shift+1, the binder refuses rather than taking
+it: macOS does not arbitrate between two services on one shortcut, it picks a winner
+and the loser stops working with no error. Take it deliberately with `--force`, or
+put Snapclip somewhere else:
+
+```sh
+SNAPCLIP_KEY_EQUIVALENT='@$2' SNAPCLIP_HOTKEY_LABEL='Cmd+Shift+2' ./bind-hotkey-macos.sh
+```
+
+(`@` is Command, `$` Shift, `^` Control, `~` Option.)
 
 ## Windows
 
