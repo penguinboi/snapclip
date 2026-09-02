@@ -135,18 +135,24 @@ PLIST
 }
 
 assign_shortcut() {
-    defaults write pbs NSServicesStatus -dict-add "$SERVICE_KEY" \
+    # Every pbs service key starts with "(null) - ", and defaults reads a leading
+    # "(" as the start of a plist array literal and rejects the key. It has to
+    # arrive already quoted. defaults exits 0 on that failure, so the shortcut is
+    # read back afterwards rather than trusted.
+    defaults write pbs NSServicesStatus -dict-add "\"$SERVICE_KEY\"" \
         "{ key_equivalent = \"$KEY_EQUIVALENT\"; enabled_context_menu = 1; enabled_services_menu = 1; }"
     /System/Library/CoreServices/pbs -flush 2>/dev/null
     /System/Library/CoreServices/pbs -update 2>/dev/null
 }
 
 read_shortcut() {
+    # Quoting differs across macOS versions, so normalise it away before matching.
     defaults read pbs NSServicesStatus 2>/dev/null |
+        tr -d '"' |
         tr -d '\n' |
-        grep -o "\"$SERVICE_KEY\"[^}]*}" |
-        grep -o 'key_equivalent = "[^"]*"' |
-        sed 's/.*"\(.*\)"/\1/'
+        grep -o "$SERVICE_KEY[^}]*}" |
+        grep -o 'key_equivalent = [^;]*' |
+        sed 's/^key_equivalent = //'
 }
 
 verify() {
@@ -183,8 +189,11 @@ warn_on_shortcut_conflict() {
     local dump others
     dump="$(defaults read pbs NSServicesStatus 2>/dev/null)" || return 0
 
+    # `defaults read` quotes keys inconsistently across macOS versions, so compare
+    # with every quote stripped instead of guessing which form this machine emits.
     others="$(printf '%s\n' "$dump" |
-        grep -B6 -F "key_equivalent = \"$KEY_EQUIVALENT\"" |
+        tr -d '"' |
+        grep -B6 -F "key_equivalent = $KEY_EQUIVALENT;" |
         grep -F '(null)' |
         grep -vF "$SERVICE_KEY" |
         sed 's/^[[:space:]]*//; s/[[:space:]]*=.*$//')"
