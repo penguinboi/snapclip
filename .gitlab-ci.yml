@@ -1,0 +1,26 @@
+# ABOUTME: GitLab CI for snapclip: shellcheck on the shell scripts, then the shell tests that run on Linux.
+# ABOUTME: Not run here: snapclip.tests.ps1 (PowerShell, real clipboard) and build.sh (macOS signing).
+
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+shellcheck:
+  image:
+    name: koalaman/shellcheck-alpine:v0.10.0
+    entrypoint: [""]
+  script:
+    # Excluded findings that exist in the scripts today and are intentional:
+    # SC1007 (VAR= prefix used to blank a variable in tests), SC1087 (regex in a
+    # grep pattern, not an array), SC1090 (sourced path is built at run time).
+    - shellcheck -x --severity=warning -e SC1007,SC1087,SC1090 *.sh src/*.sh tests/*.sh
+
+linux-tests:
+  image: ubuntu:24.04
+  script:
+    - bash tests/snapclip-linux.test.sh
+    - bash tests/bind-hotkey-macos.test.sh
