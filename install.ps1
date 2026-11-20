@@ -23,8 +23,12 @@ if ($Hotkey -notmatch '^(CTRL|ALT|SHIFT)\+') {
 }
 
 # Prefer PowerShell 7, but Windows PowerShell is always present as a fallback.
-$powershell = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
-if (-not $powershell) {
+# Under strict mode, reading .Source off a missing command throws, so test the
+# lookup itself before touching the property.
+$pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+if ($pwsh) {
+    $powershell = $pwsh.Source
+} else {
     $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 }
 
